@@ -21,7 +21,7 @@ members = [".", "cli"]
 
 [workspace.dependencies]
 sha2 = "=0.11.0-pre.4"
-x509-cert = { version = "=0.3.0-pre.0", features = [ "builder", "hazmat" ] }
+x509-cert = { version = "0.3.0-rc.0", features = [ "builder", "hazmat" ] }
 
 [dependencies]
 bitflags = "2.5.0"
