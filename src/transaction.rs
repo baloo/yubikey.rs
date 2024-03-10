@@ -19,7 +19,7 @@ use log::{error, trace};
 use zeroize::Zeroizing;
 
 #[cfg(feature = "untested")]
-use crate::mgm::{MgmKey, DES_LEN_3DES};
+use crate::mgm::{DeviceConfig, DeviceInfo, MgmKey, DES_LEN_3DES};
 
 const CB_PIN_MAX: usize = 8;
 
@@ -74,7 +74,7 @@ impl<'tx> Transaction<'tx> {
     }
 
     /// Select application.
-    pub(crate) fn select_application(
+    pub fn select_application(
         &self,
         applet: &[u8],
         applet_name: &'static str,
@@ -755,5 +755,61 @@ impl<'tx> Transaction<'tx> {
         }
 
         Ok(())
+    }
+
+    /// Write configuration to the YubiKey
+    #[cfg(feature = "untested")]
+    pub fn write_config(&mut self, version: Version, config: DeviceConfig) -> Result<()> {
+        if version
+            < (Version {
+                major: 5,
+                minor: 0,
+                patch: 0,
+            })
+        {
+            return Err(Error::NotSupported);
+        }
+
+        let data = config.as_tlv(true)?;
+
+        let response = Apdu::new(Ins::WriteConfig)
+            .params(0x00, 0x00)
+            .data(&data)
+            .transmit(self, 2)?;
+
+        if !response.is_success() {
+            error!(
+                "Unable to write_config: {:04x}",
+                response.status_words().code()
+            );
+            return Err(Error::GenericError);
+        }
+
+        Ok(())
+    }
+
+    /// Write configuration to the YubiKey
+    #[cfg(feature = "untested")]
+    pub fn read_config(&mut self) -> Result<DeviceInfo> {
+        let mut data = [0u8; CB_BUF_MAX];
+        let mut len = data.len();
+        let data_remaining = &mut data[..];
+
+        len -= data_remaining.len();
+        let response = Apdu::new(Ins::ReadConfig)
+            .params(0x00, 0x00)
+            .data(&data[..len])
+            .transmit(self, CB_BUF_MAX + 2)?;
+
+        if !response.is_success() {
+            error!(
+                "Unable to read configuration: {:04x}",
+                response.status_words().code()
+            );
+            return Err(Error::GenericError);
+        }
+
+        let data = response.data();
+        DeviceInfo::parse(data)
     }
 }
