@@ -44,9 +44,9 @@ use {
     crate::{
         consts::{
             CB_BUF_MAX, TAG_ADMIN_FLAGS_1, TAG_ADMIN_SALT, TAG_AUTO_EJECT_TIMEOUT,
-            TAG_CHALRESP_TIMEOUT, TAG_DEVICE_FLAGS, TAG_FORM_FACTOR, TAG_NFC_ENABLED,
-            TAG_NFC_SUPPORTED, TAG_PROTECTED_MGM, TAG_REBOOT, TAG_SERIAL, TAG_USB_ENABLED,
-            TAG_USB_SUPPORTED, TAG_VERSION,
+            TAG_CHALRESP_TIMEOUT, TAG_CONFIG_LOCK, TAG_DEVICE_FLAGS, TAG_FORM_FACTOR,
+            TAG_NFC_ENABLED, TAG_NFC_SUPPORTED, TAG_PROTECTED_MGM, TAG_REBOOT, TAG_SERIAL,
+            TAG_UNLOCK, TAG_USB_ENABLED, TAG_USB_SUPPORTED, TAG_VERSION,
         },
         metadata::{AdminData, ProtectedData},
         serialization::Tlv,
@@ -463,9 +463,60 @@ impl Manager {
     pub fn enable_yubihsm(&mut self) -> Result<()> {
         let mut config = Transaction::new(&mut self.client.card)?.read_config()?;
         config.config.usb_enabled_apps |= Capability::HSMAUTH;
-        Transaction::new(&mut self.client.card)?
-            .write_config(self.client.version, config.config)?;
+        Transaction::new(&mut self.client.card)?.write_config(
+            self.client.version,
+            config.config,
+            None,
+            None,
+        )?;
         Ok(())
+    }
+
+    /// Enable PIV applet
+    pub fn enable_piv(&mut self) -> Result<()> {
+        let mut config = Transaction::new(&mut self.client.card)?.read_config()?;
+        config.config.usb_enabled_apps |= Capability::PIV;
+        Transaction::new(&mut self.client.card)?.write_config(
+            self.client.version,
+            config.config,
+            None,
+            None,
+        )?;
+        Ok(())
+    }
+
+    /// Disable NFC interface on the device
+    pub fn disable_nfc(&mut self) -> Result<()> {
+        let mut config = Transaction::new(&mut self.client.card)?.read_config()?;
+        config.config.nfc_enabled_apps = Some(Capability::empty());
+        Transaction::new(&mut self.client.card)?.write_config(
+            self.client.version,
+            config.config,
+            None,
+            None,
+        )?;
+        Ok(())
+    }
+
+    /// Lock configuration of the device
+    pub fn lock_config(
+        &mut self,
+        current_lock: Option<Lock>,
+        new_lock: Option<Lock>,
+    ) -> Result<()> {
+        let config = Transaction::new(&mut self.client.card)?.read_config()?;
+        Transaction::new(&mut self.client.card)?.write_config(
+            self.client.version,
+            config.config,
+            current_lock,
+            new_lock,
+        )?;
+        Ok(())
+    }
+
+    /// Read configuration from yubikey
+    pub fn read_config(&mut self) -> Result<DeviceInfo> {
+        Transaction::new(&mut self.client.card)?.read_config()
     }
 
     /// Return the inner [`YubiKey`]
@@ -475,19 +526,39 @@ impl Manager {
     }
 }
 
+/// secret to lock YubiKey's configuration
+pub struct Lock(pub [u8; 16]);
+
+impl Lock {
+    /// Clear the locking of configuration
+    pub const UNLOCKED: Lock = Lock([0; 16]);
+}
+
+/// Configuration for a device
 #[derive(Clone, Debug, PartialEq)]
 #[cfg(feature = "untested")]
-pub(crate) struct DeviceConfig {
-    usb_enabled_apps: Capability,
-    nfc_enabled_apps: Capability,
-    auto_eject_timeout: Option<u16>,
-    challenge_response_timeout: Option<u8>,
-    device_flags: Option<DeviceFlags>,
+pub struct DeviceConfig {
+    /// List of applets that are available on the USB interface
+    pub usb_enabled_apps: Capability,
+    /// List of applets that are available on the NFC interface.
+    /// Field will be set to None if the device doesn't support NFC
+    pub nfc_enabled_apps: Option<Capability>,
+    /// When set, the smartcard will automatically eject after the given time.
+    pub auto_eject_timeout: Option<u16>,
+    /// The timeout when waiting for touch for challenge response.
+    pub challenge_response_timeout: Option<u8>,
+    /// Configuration flags
+    pub device_flags: Option<DeviceFlags>,
 }
 
 #[cfg(feature = "untested")]
 impl DeviceConfig {
-    pub(crate) fn as_tlv(&self, reboot: bool) -> Result<Vec<u8>> {
+    pub(crate) fn as_tlv(
+        &self,
+        reboot: bool,
+        current_lock: Option<Lock>,
+        new_lock: Option<Lock>,
+    ) -> Result<Vec<u8>> {
         let mut data = [0u8; CB_BUF_MAX];
         let mut len = data.len();
         let mut data_remaining = &mut data[1..];
@@ -497,7 +568,12 @@ impl DeviceConfig {
             data_remaining = &mut data_remaining[offset..];
         }
 
-        if !self.usb_enabled_apps.is_empty() {
+        if let Some(lock) = current_lock {
+            let offset = Tlv::write(data_remaining, TAG_UNLOCK, &lock.0[..])?;
+            data_remaining = &mut data_remaining[offset..];
+        }
+
+        {
             let offset = Tlv::write(
                 data_remaining,
                 TAG_USB_ENABLED,
@@ -505,11 +581,11 @@ impl DeviceConfig {
             )?;
             data_remaining = &mut data_remaining[offset..];
         }
-        if !self.nfc_enabled_apps.is_empty() {
+        if let Some(nfc_enabled_apps) = self.nfc_enabled_apps {
             let offset = Tlv::write(
                 data_remaining,
                 TAG_NFC_ENABLED,
-                &self.nfc_enabled_apps.bits().to_be_bytes()[..],
+                &nfc_enabled_apps.bits().to_be_bytes()[..],
             )?;
             data_remaining = &mut data_remaining[offset..];
         }
@@ -538,9 +614,23 @@ impl DeviceConfig {
             data_remaining = &mut data_remaining[offset..];
         }
 
+        if let Some(lock) = new_lock {
+            let offset = Tlv::write(data_remaining, TAG_CONFIG_LOCK, &lock.0[..])?;
+            data_remaining = &mut data_remaining[offset..];
+        }
+
         len -= data_remaining.len();
         data[0] = (len - 1) as u8;
         Ok(data[..len].to_vec())
+    }
+
+    /// Is the NFC interface active
+    pub fn nfc_enabled(&self) -> bool {
+        // It happens that the yubikey will disable the NFC interface entirely if every applet is
+        // disabled.
+        self.nfc_enabled_apps
+            .map(|nfc| !nfc.is_empty())
+            .unwrap_or(false)
     }
 }
 
@@ -548,7 +638,7 @@ impl DeviceConfig {
 bitflags! {
     /// Represents a set of applications.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-    struct Capability: u16 {
+    pub struct Capability: u16 {
         /// One Time Password
         const OTP =0x01;
         /// U2F
@@ -569,9 +659,14 @@ bitflags! {
     }
 }
 
+/// Device information
+/// This represents the configuration and the status of the device
 #[cfg(feature = "untested")]
-pub(crate) struct DeviceInfo {
-    pub(crate) config: DeviceConfig,
+pub struct DeviceInfo {
+    /// Configuration of the YubiKey
+    pub config: DeviceConfig,
+    /// Is the configuration locked with a password?
+    pub is_locked: bool,
 }
 
 #[cfg(feature = "untested")]
@@ -622,6 +717,7 @@ impl DeviceInfo {
             auto_eject_timeout: Option<u16>,
             challenge_response_timeout: Option<u8>,
             device_flags: Option<DeviceFlags>,
+            is_locked: bool,
         }
 
         let (input, len) = u8(input).map_err(|_: nom::Err<()>| Error::ParseError)?;
@@ -697,6 +793,10 @@ impl DeviceInfo {
                             );
                             Ok(config)
                         }
+                        v if v == TAG_CONFIG_LOCK => {
+                            config.is_locked = tlv.value == b"\x01";
+                            Ok(config)
+                        }
                         // TODO(baloo): implement config lock
                         _unsupported => {
                             // New unsupported tags
@@ -710,26 +810,22 @@ impl DeviceInfo {
         .map_err(|_: nom::Err<()>| Error::ParseError)?
         .1?;
 
-        let usb_enabled_apps = if let Some(enabled) = out.usb_enabled_apps {
-            enabled
-        } else {
-            return Err(Error::ParseError);
-        };
-        let nfc_enabled_apps = if let Some(enabled) = out.nfc_enabled_apps {
-            enabled
-        } else {
+        let Some(usb_enabled_apps) = out.usb_enabled_apps else {
             return Err(Error::ParseError);
         };
 
         let config = DeviceConfig {
             usb_enabled_apps,
-            nfc_enabled_apps,
+            nfc_enabled_apps: out.nfc_enabled_apps,
             auto_eject_timeout: out.auto_eject_timeout,
             challenge_response_timeout: out.challenge_response_timeout,
             device_flags: out.device_flags,
         };
 
-        Ok(DeviceInfo { config })
+        Ok(DeviceInfo {
+            config,
+            is_locked: out.is_locked,
+        })
     }
 }
 
@@ -784,7 +880,7 @@ impl FormFactor {
 bitflags! {
     /// Represents configuration flags.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-    struct DeviceFlags: u8{
+    pub struct DeviceFlags: u8{
         /// Remote wake-up
         const REMOTE_WAKEUP = 0x40;
         /// Eject

@@ -19,7 +19,7 @@ use log::{error, trace};
 use zeroize::Zeroizing;
 
 #[cfg(feature = "untested")]
-use crate::mgm::{DeviceConfig, DeviceInfo, MgmKey, DES_LEN_3DES};
+use crate::mgm::{DeviceConfig, DeviceInfo, Lock, MgmKey, DES_LEN_3DES};
 
 const CB_PIN_MAX: usize = 8;
 
@@ -759,7 +759,13 @@ impl<'tx> Transaction<'tx> {
 
     /// Write configuration to the YubiKey
     #[cfg(feature = "untested")]
-    pub fn write_config(&mut self, version: Version, config: DeviceConfig) -> Result<()> {
+    pub fn write_config(
+        &mut self,
+        version: Version,
+        config: DeviceConfig,
+        current_lock: Option<Lock>,
+        new_lock: Option<Lock>,
+    ) -> Result<()> {
         if version
             < (Version {
                 major: 5,
@@ -770,7 +776,7 @@ impl<'tx> Transaction<'tx> {
             return Err(Error::NotSupported);
         }
 
-        let data = config.as_tlv(true)?;
+        let data = config.as_tlv(true, current_lock, new_lock)?;
 
         let response = Apdu::new(Ins::WriteConfig)
             .params(0x00, 0x00)
