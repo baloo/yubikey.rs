@@ -634,7 +634,7 @@ impl<'tx> Transaction<'tx> {
         let response = Apdu::new(Ins::ListCredentials)
             .params(0x00, 0x00)
             .data(&data[..len])
-            .transmit(self, (Challenge::SIZE) + 2)?;
+            .transmit(self, (Challenge::SIZE) * 32)?;
 
         let data = response.data();
         Credential::parse_list(data)
