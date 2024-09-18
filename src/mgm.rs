@@ -519,6 +519,13 @@ impl Manager {
         Transaction::new(&mut self.client.card)?.read_config()
     }
 
+    /// Reset the yubikey to factory
+    pub fn device_reset(&mut self) -> Result<()> {
+        Transaction::new(&mut self.client.card)?.reset_device()
+        ?;
+        Ok(())
+    }
+
     /// Return the inner [`YubiKey`]
     pub fn into_inner(mut self) -> Result<YubiKey> {
         Transaction::new(&mut self.client.card)?.select_piv_application()?;

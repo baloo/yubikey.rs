@@ -818,4 +818,22 @@ impl<'tx> Transaction<'tx> {
         let data = response.data();
         DeviceInfo::parse(data)
     }
+
+    /// Write configuration to the YubiKey
+    #[cfg(feature = "untested")]
+    pub fn reset_device(&mut self) -> Result<()> {
+        let response = Apdu::new(Ins::DeviceReset)
+            .params(0x00, 0x00)
+            .transmit(self, 2)?;
+
+        if !response.is_success() {
+            error!(
+                "Unable to reset device: {:04x}",
+                response.status_words().code()
+            );
+            return Err(Error::GenericError);
+        }
+
+        Ok(())
+    }
 }
