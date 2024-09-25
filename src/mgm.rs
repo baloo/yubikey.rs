@@ -36,7 +36,7 @@ use rand_core::{OsRng, RngCore};
 use zeroize::{Zeroize, Zeroizing};
 
 use des::{
-    cipher::{generic_array::GenericArray, BlockDecrypt, BlockEncrypt, KeyInit},
+    cipher::{array::Array, Block, BlockCipherDecrypt, BlockCipherEncrypt, KeyInit},
     TdesEde3,
 };
 #[cfg(feature = "untested")]
@@ -333,16 +333,18 @@ impl MgmKey {
     /// Encrypt with 3DES key
     pub(crate) fn encrypt(&self, input: &[u8; DES_LEN_DES]) -> [u8; DES_LEN_DES] {
         let mut output = input.to_owned();
-        TdesEde3::new(GenericArray::from_slice(&self.0))
-            .encrypt_block(GenericArray::from_mut_slice(&mut output));
+        TdesEde3::new(&Array::from(self.0)).encrypt_block(
+            <&mut Block<TdesEde3>>::try_from(&mut output).expect("size invariant violation"),
+        );
         output
     }
 
     /// Decrypt with 3DES key
     pub(crate) fn decrypt(&self, input: &[u8; DES_LEN_DES]) -> [u8; DES_LEN_DES] {
         let mut output = input.to_owned();
-        TdesEde3::new(GenericArray::from_slice(&self.0))
-            .decrypt_block(GenericArray::from_mut_slice(&mut output));
+        TdesEde3::new(&Array::from(self.0)).decrypt_block(
+            <&mut Block<TdesEde3>>::try_from(&mut output).expect("size invariant violation"),
+        );
         output
     }
 }

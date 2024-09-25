@@ -41,7 +41,7 @@ use crate::{
 };
 use log::error;
 use x509_cert::{
-    builder::{self, profile::Profile, Builder, CertificateBuilder},
+    builder::{self, profile::BuilderProfile, Builder, CertificateBuilder},
     certificate::TbsCertificate,
     der::{self, referenced::OwnedToRef, Decode, Encode},
     ext::Extension,
@@ -99,7 +99,7 @@ impl SelfSigned {
     }
 }
 
-impl Profile for SelfSigned {
+impl BuilderProfile for SelfSigned {
     fn get_issuer(&self, _subject: &Name) -> Name {
         self.subject.clone()
     }
@@ -202,19 +202,19 @@ impl Certificate {
 
     /// Returns the Issuer field of the certificate.
     pub fn issuer(&self) -> String {
-        self.cert.tbs_certificate.issuer.to_string()
+        self.cert.tbs_certificate().issuer().to_string()
     }
 
     /// Returns the SubjectName field of the certificate.
     pub fn subject(&self) -> String {
-        self.cert.tbs_certificate.subject.to_string()
+        self.cert.tbs_certificate().subject().to_string()
     }
 
     /// Returns the SubjectPublicKeyInfo field of the certificate.
     pub fn subject_pki(&self) -> SubjectPublicKeyInfoRef<'_> {
         self.cert
-            .tbs_certificate
-            .subject_public_key_info
+            .tbs_certificate()
+            .subject_public_key_info()
             .owned_to_ref()
     }
 }

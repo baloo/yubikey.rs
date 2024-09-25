@@ -16,34 +16,31 @@ keywords = ["ecdsa", "encryption", "rsa", "piv", "signature"]
 edition = "2021"
 rust-version = "1.75"
 
-[patch.crates-io]
-x509-cert = { git = "https://github.com/RustCrypto/formats.git" }
-
 [workspace]
 members = [".", "cli"]
 
 [workspace.dependencies]
-x509-cert = { version = "=0.3.0-pre", features = [ "builder", "hazmat" ] }
+x509-cert = { version = "=0.3.0-pre.0", features = [ "builder", "hazmat" ] }
 
 [dependencies]
 bitflags = "2.5.0"
 der = "0.8.0-rc.0"
-des = "0.8"
-elliptic-curve = "=0.14.0-pre.6"
+des = "=0.9.0-pre.2"
+elliptic-curve = "=0.14.0-rc.1"
 hex = { package = "base16ct", version = "0.2", features = ["alloc"] }
-hmac = "0.12"
+hmac = "=0.13.0-pre.4"
 log = "0.4"
 nom = "7"
 num-bigint-dig = { version = "0.8", features = ["rand"] }
 num-traits = "0.2"
 num-integer = "0.1"
 ecdsa = { version = "0.17.0-pre.5", features = ["digest", "pem"] }
-p256 = "=0.14.0-pre.1"
-p384 = "=0.14.0-pre.1"
+p256 = "=0.14.0-pre.2"
+p384 = "=0.14.0-pre.2"
 pbkdf2 = { version = "=0.13.0-pre.1", default-features = false, features = ["hmac"] }
 pcsc = "2.3.1"
 rand_core = { version = "0.6", features = ["std"] }
-rsa = { version = "=0.10.0-pre.2", features = ["sha2"] }
+rsa = { version = "=0.10.0-pre.3", features = ["sha2"] }
 secrecy = "0.8"
 sha1 = { version = "=0.11.0-pre.4", features = ["oid"] }
 sha2 = { version = "=0.11.0-pre.4", features = ["oid"] }
