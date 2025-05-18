@@ -14,7 +14,7 @@ readme = "README.md"
 categories = ["api-bindings", "authentication", "cryptography", "hardware-support"]
 keywords = ["ecdsa", "encryption", "rsa", "piv", "signature"]
 edition = "2021"
-rust-version = "1.81"
+rust-version = "1.85"
 
 [workspace]
 members = [".", "cli"]
@@ -24,24 +24,22 @@ sha2 = "0.11.0-rc.0"
 x509-cert = { version = "0.3.0-rc.0", features = [ "builder", "hazmat" ] }
 
 [dependencies]
-aes = { version = "=0.9.0-pre.2", features = ["zeroize"] }
+aes = { version = "0.9.0-rc.0", features = ["zeroize"] }
 bitflags = "2.5.0"
 cipher = { version = "0.5.0-rc.0", features = ["rand_core"] }
 der = "0.8.0-rc.2"
 des = "0.9.0-rc.0"
-elliptic-curve = "0.14.0-rc.1"
+elliptic-curve = "0.14.0-rc.3"
 hex = { package = "base16ct", version = "0.2", features = ["alloc"] }
 log = "0.4"
 nom = "7"
-num-bigint-dig = { version = "0.8", features = ["rand"] }
-num-traits = "0.2"
-num-integer = "0.1"
 ecdsa = { version = "0.17.0-rc.0", features = ["digest", "pem"] }
 p256 = "=0.14.0-pre.5"
 p384 = "=0.14.0-pre.5"
 pbkdf2 = { version = "0.13.0-rc.0", default-features = false, features = ["hmac"] }
 pcsc = "2.3.1"
-rand_core = { version = "0.6", features = ["std"] }
+rand = "0.9"
+rand_core = { version = "0.9", features = ["os_rng"] }
 rsa = { version = "0.10.0-rc.0", features = ["sha2"] }
 secrecy = "0.8"
 sha1 = { version = "0.11.0-rc.0", features = ["oid"] }
@@ -62,3 +60,6 @@ untested = []
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[patch.crates-io]
+x509-cert = { git = "https://github.com/RustCrypto/formats.git" }
