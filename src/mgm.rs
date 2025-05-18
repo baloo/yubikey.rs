@@ -35,8 +35,7 @@ use crate::{
     Error, Result,
 };
 use cipher::{typenum::Unsigned, BlockCipherDecrypt, BlockCipherEncrypt, Key, KeyInit};
-use log::error;
-use rand_core::CryptoRngCore;
+use rand_core::CryptoRng;
 use zeroize::Zeroize;
 
 #[cfg(feature = "untested")]
@@ -55,6 +54,7 @@ use {
         Serial,
     },
     bitflags::bitflags,
+    log::error,
     pbkdf2::pbkdf2_hmac,
     sha1::Sha1,
 };
@@ -196,7 +196,7 @@ enum MgmKeyKind {
 
 impl MgmKey {
     /// Generates a random MGM key for the given algorithm.
-    pub fn generate<C: MgmKeyAlgorithm>(rng: &mut impl CryptoRngCore) -> Result<Self> {
+    pub fn generate<C: MgmKeyAlgorithm, R: CryptoRng + ?Sized>(rng: &mut R) -> Result<Self> {
         match C::ALGORITHM_ID {
             MgmAlgorithmId::ThreeDes => MgmKey3Des::generate(rng).map(MgmKeyKind::Tdes),
             MgmAlgorithmId::Aes128 => MgmKeyAes128::generate(rng).map(MgmKeyKind::Aes128),
@@ -208,7 +208,7 @@ impl MgmKey {
 
     /// Generates a random MGM key using the preferred algorithm for the given Yubikey's
     /// firmware version.
-    pub fn generate_for(yubikey: &YubiKey, rng: &mut impl CryptoRngCore) -> Result<Self> {
+    pub fn generate_for<R: CryptoRng + ?Sized>(yubikey: &YubiKey, rng: &mut R) -> Result<Self> {
         match yubikey.version() {
             // Initial firmware versions default to 3DES.
             Version { major: ..=4, .. }
@@ -318,11 +318,8 @@ pub struct SpecificMgmKey<C: MgmKeyAlgorithm>(Key<C>);
 
 impl<C: MgmKeyAlgorithm> SpecificMgmKey<C> {
     /// Generates a random MGM key for this algorithm.
-    pub fn generate(rng: &mut impl CryptoRngCore) -> Result<Self> {
-        let key = C::generate_key_with_rng(rng).map_err(|e| {
-            error!("RNG failure: {}", e);
-            Error::KeyError
-        })?;
+    pub fn generate<R: CryptoRng + ?Sized>(rng: &mut R) -> Result<Self> {
+        let key = C::generate_key_with_rng(rng);
         Ok(Self(key))
     }
 
