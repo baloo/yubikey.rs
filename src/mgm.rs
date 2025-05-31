@@ -32,7 +32,7 @@
 
 use crate::{Error, Result};
 use log::error;
-use rand_core::{OsRng, RngCore};
+use rand_core::RngCore;
 use zeroize::Zeroize;
 
 use des::{
@@ -56,6 +56,7 @@ use {
         Serial, Version,
     },
     bitflags::bitflags,
+    log::error,
     pbkdf2::pbkdf2_hmac,
     sha1::Sha1,
 };
@@ -156,7 +157,8 @@ impl MgmKey {
     /// Generate a random MGM key
     pub fn generate() -> Self {
         let mut key_bytes = [0u8; DES_LEN_3DES];
-        OsRng.fill_bytes(&mut key_bytes);
+        let mut rng = rand::rng();
+        rng.fill_bytes(&mut key_bytes);
         Self(key_bytes)
     }
 
